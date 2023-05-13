@@ -56,15 +56,15 @@ class Agent:
     
     @abstractmethod
     def insert_to_open(self, node):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def states_in_open(self):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def get_next(self):
-        pass
+        raise NotImplementedError
 
     def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
         self.init_search(env)
