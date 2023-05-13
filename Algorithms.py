@@ -5,269 +5,410 @@ from FrozenLakeEnv import FrozenLakeEnv
 from typing import List, Tuple
 import heapdict
 
-VERBOSE = True
+VERBOSE = False
 
-class Node2:
-    def __init__(self, state, action=None, parent=None, cost=0, depth=0,terminated=False):
+class Node:
+    def __init__(self, state, parent=None,
+                 action: int = None, cost: int = 0, terminated:bool = False,
+                 g: int = 0, h: int = 0):
+        
         self.state = state
-        self.action = action
         self.parent = parent
+        
+        self.action = action
         self.cost = cost
-        self.depth = depth
-        self.is_terminated = terminated
+        self.terminated = terminated
+        
+        self.g = g
+        self.h = h
+        self.f = g + h
     
     def __eq__(self, other):
-        if isinstance(other, Node2):
-            return self.state == other.state
-        return False
+        if not isinstance(other, Node):
+            return False
+        return self.state == other.state
 
     def __lt__(self, other):
+        if not isinstance(other, Node):
+            return False
+        if self.cost == other.cost:
+            return self.state < other.state
         return self.cost < other.cost
+    
+    def __hash__(self):
+        return hash(self.state)
+    
+    def __repr__(self):
+        return f"Node(state={self.state}, parent={self.parent}, action={self.action}, cost={self.cost}, terminated={self.terminated}, g={self.g}, h={self.h}, f={self.f})"
+    
        
-class Agent2:
+class Agent:
     def __init__(self):
         self.env = None
         self.open = None
         self.close = set()
         self.expanded = 0
-
-    def pop(self) -> Node2:
-        pass
-    def push(self, node: Node2):
-        pass
-    def empty(self) -> bool:
-        pass
     
-    def expand(self, node:Node2):
-        if VERBOSE:
-            print(f"Expanding node {node.state}")
-            
-        if node.is_terminated:
-            return
+    def expand(self, node: Node) -> Node:
+        if VERBOSE: print(f"Expanding node {node.state}")
         
         self.expanded += 1
         
         for action, (state, cost, terminated) in self.env.succ(node.state).items():
-            if state is not None and state not in self.close:
-                child = Node2(state, action, node, node.cost + cost, node.depth + 1, terminated)
+            if state != None:
+                child = Node(state=state, parent=node, action=action, cost=cost, terminated=terminated)
                 yield child
 
-    def solution(self, node:Node2):
+    def solution(self, node: Node) -> Tuple[List[int], int, float]:
         actions = []
-        total_cost = 0
-        
+        total_cost = node.cost
+
         while node.parent:
             actions.append(node.action)
             node = node.parent
-            total_cost += node.cost
 
         return list(reversed(actions)), total_cost, self.expanded
     
+    @abstractmethod
     def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
-        self.env = env
-        self.env.reset()
-        node = Node2(env.get_initial_state())
-        
-        if env.is_final_state(node.state):
-            return self.solution(node)
-        self.push(node)
-                    
-        while not self.empty():
-            node = self.pop()          
-            self.close.add(node.state)
-            
-            for child in self.expand(node):
-                if (child.state not in self.close) and (child not in self.open):
-                    if env.is_final_state(child.state):
-                        return self.solution(child)
-                    self.push(child)
-                
-        return None
+        pass
 
 
-class BFSAgent2(Agent2):
+class BFSAgent(Agent):
     def __init__(self):
         super().__init__()
         self.open = deque()
         
-    def pop(self):
-        return self.open.pop()
-    
-    def push(self, node):
+    def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
+        self.env = env
+        self.env.reset()
+
+        node = Node(env.get_initial_state())
+        if env.is_final_state(node.state):
+            return self.solution(node)
+
         self.open.append(node)
+        self.close = set()
+
+        while len(self.open) > 0:
+            node = self.open.pop()
+            self.close.add(node.state)
+            
+            for child in self.expand(node):
+                if child.state not in self.close and child not in self.open:
+                    if env.is_final_state(child.state):
+                        return self.solution(child)
+
+                    self.open.append(child)
         
-    def empty(self):
-        return len(self.open) == 0
+        return None
 
 #######################################################################
-# class Node():
+
+# class Node:
 #     def __init__(self) -> None:
 #         self.state = -1
 #         self.actions = []
-        
-#     @staticmethod
-#     def contains_state(node_list, node):
-#         for curr_node in node_list:
-#             if curr_node.state == node.state:
-#                 return True
+#         self.cost = 0
+
+#     def __eq__(self, other):
+#         if isinstance(other, Node):
+#             return self.state == other.state
 #         return False
 
-#     @staticmethod   
-#     def make_node(state, actions=[]):
+#     def __lt__(self, other):
+#         if isinstance(other, Node):
+#             if self.cost == other.cost:
+#                 return self.state < other.state
+#             return self.cost < other.cost
+#         return False
+
+#     def __hash__(self):
+#         return hash(self.state)
+
+#     # @staticmethod
+#     # def contains_state(node_list, node):
+#     #     for curr_node in node_list:
+#     #         if curr_node.state == node.state:
+#     #             return True
+#     #     return False
+
+#     @staticmethod
+#     def make_node(state, actions=[], cost=0):
 #         n = Node()
 #         n.state = state
 #         n.actions = actions
+#         n.cost = cost
 #         return n
-    
-# class Agent():
+
+
+# class Agent:
 #     def __init__(self) -> None:
-#         self.open = []
 #         self.close = set()
-#         self.actionsMapping = ['down','right','up','left']
 #         self.cost = 0
-#         self.expended = 0
+#         self.expanded = 0
 #         self.env = None
-#         self.expanded_counter = 0
-    
-#     # def reverse_action(self, action):
-#     #     return (action + 2) % 4
 
-#     @abstractmethod
-#     def next(self):
-#         pass
-    
-#     @abstractmethod
-#     def insert_new(self, child):
-#         pass
-
-#     def expand(self, current):    
-#         self.expanded_counter += 1
-#         for action, (state, cost, terminated) in self.env.succ(current.state).items():
-#             if(state != None):
+#     def expand(self, current):
+#         self.expanded += 1
+#         for action, (state, cost, _) in self.env.succ(current.state).items():
+#             if state != None and state != current.state:
 #                 yield action, (state, cost)
-    
+
 #     def solution(self, final_node):
 #         actions = final_node.actions
 #         total_cost = 0
-        
+
 #         for action in actions:
 #             state, cost, _ = self.env.step(action)
 #             self.env.set_state(state)
 #             total_cost += cost
-            
-#         return actions, total_cost, self.expanded_counter
-    
+
+#         return actions, total_cost, self.expanded
+
+#     @abstractmethod
 #     def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
-#         self.env = env
-#         self.env.reset()
-        
-#         node = Node.make_node(env.get_initial_state())
-#         if env.is_final_state(node.state):
-#             return self.solution(node)
-        
-#         self.open.append(node)
-#         self.close = set()
-        
-#         while len(self.open) > 0:
-#             node = self.next() # TODO: maybe refactor
-#             self.close.add(node.state)
-#             for a, (s, _) in self.expand(node):
-#                 child = Node.make_node(s, node.actions + [a])
-#                 if child.state not in self.close and not Node.contains_state(self.open, child):
-#                     if env.is_final_state(s):
-#                         # print(f"{self.close}")
-#                         return self.solution(child)
-                    
-#                     self.insert_new(child)
-#         # print(f"{self.close}")        
-#         return None
-    
-    
+#         pass
+
+
 # class BFSAgent(Agent):
 #     def __init__(self) -> None:
 #         super().__init__()
+#         self.open = []
 
-#     def next(self):
-#         return self.open.pop(0)
-    
-#     def insert_new(self, child):
-#         self.open.append(child)
-    
+#     def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
+#         self.env = env
+#         self.env.reset()
+
+#         node = Node.make_node(env.get_initial_state())
+#         if env.is_final_state(node.state):
+#             return self.solution(node)
+
+#         self.open.append(node)
+#         self.close = set()
+
+#         while len(self.open) > 0:
+#             node = self.open.pop(0)
+#             self.close.add(node.state)
+#             for a, (s, c) in self.expand(node):
+#                 child = Node.make_node(s, node.actions + [a], 0)
+#                 if child.state not in self.close and child not in self.open:
+#                     if env.is_final_state(s):
+#                         return self.solution(child)
+
+#                     self.open.append(child)
+#         return None
 
 
 # class DFSAgent(Agent):
 #     def __init__(self) -> None:
 #         super().__init__()
-#         self.states_proccessed = 0
-
-#     def next(self):
-#         return self.open.pop(-1)
-    
-#     def insert_new(self, child):
-#         self.open.append(child)
-
-#     def see_state(self, state):
-#         self.close.add(state)
-#         self.states_proccessed += 1
-
-#     def solution(self, node):
-#         res = super().solution(node)
-#         return res[0], res[1], self.states_proccessed
+#         self.open = []
 
 #     def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
 #         self.env = env
 #         self.env.reset()
-        
+
 #         node = Node.make_node(env.get_initial_state())
-#         # if env.is_final_state(node.state):
-#             # return self.solution(node)
-#         # open = [node]
+#         if env.is_final_state(node.state):
+#             return self.solution(node)
+
 #         self.close = set()
 #         return self.search_aux(node)
 
 #     def search_aux(self, node):
 #         if self.env.is_final_state(node.state):
 #             return self.solution(node)
-#         self.see_state(node.state)
+#         self.close.add(node.state)
 #         for a, (s, _) in self.expand(node):
-#             child =  Node.make_node(s, node.actions + [a])
+#             child = Node.make_node(s, node.actions + [a])
 #             if child.state not in self.close:
 #                 res = self.search_aux(child)
 #                 if res is not None:
 #                     return res
-#         self.close.remove(node.state)
 #         return None
 
-# class UCSAgent():
-  
+
+# class UCSAgent(Agent):
 #     def __init__(self) -> None:
-#         raise NotImplementedError
+#         super().__init__()
+#         self.open = heapdict.heapdict()
 
 #     def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
-#         raise NotImplementedError
+#         self.env = env
+#         self.env.reset()
+
+#         node = Node.make_node(env.get_initial_state())
+#         if env.is_final_state(node.state):
+#             return self.solution(node)
+
+#         self.open[(0, node.state)] = node
+#         self.close = set()
+
+#         while len(self.open) > 0:
+#             node = self.open.popitem()[1]
+#             self.close.add(node.state)
+#             for a, (s, c) in self.expand(node):
+#                 child = Node.make_node(s, node.actions + [a], node.cost + c)
+#                 if child.state not in self.close and child not in self.open.values():
+#                     if env.is_final_state(s):
+#                         return self.solution(child)
+
+#                     self.open[(child.cost, child.state)] = child
+#         return None
+
+#     @abstractmethod
+#     def insert_new(self, child):
+#         self.open[(child.cost, child.state)] = child
 
 
-
-# class GreedyAgent():
-  
+# class GreedyAgent(Agent):
 #     def __init__(self) -> None:
-#         raise NotImplementedError
+#         super().__init__()
+#         self.open = heapdict.heapdict()
+
+#     def h(self, state):
+#         r_current, c_current = self.env.to_row_col(state)
+#         goal_states = self.env.get_goal_states()
+#         goal_coords = [self.env.to_row_col(state) for state in goal_states]
+#         manhatans = [
+#             abs(r_current - r_goal) + abs(c_current - c_goal)
+#             for r_goal, c_goal in goal_coords
+#         ]
+#         return min(manhatans + [100])
 
 #     def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
-#         raise NotImplementedError
+#         self.env = env
+#         self.env.reset()
 
-# class WeightedAStarAgent():
-    
-#     def __init__(self):
-#         raise NotImplementedError
+#         init_state = self.env.get_initial_state()
+#         node = Node.make_node(init_state, [], 0)
+#         self.open[(self.h(init_state), node.state)] = node
+
+#         while len(self.open) > 0:
+#             node = self.open.popitem()[1]
+#             if env.is_final_state(node.state):
+#                 return self.solution(node)
+
+#             for a, (s, c) in self.expand(node):
+#                 if s not in self.close and (self.h(s), s) not in self.open.keys():
+#                     child = Node.make_node(s, node.actions + [a], self.h(s))
+#                     self.open[(self.h(child.state), child.state)] = child
+
+#         return None
+
+
+# class WeightedAStarAgent(Agent):
+#     def __init__(self) -> None:
+#         super().__init__()
+#         self.open = heapdict.heapdict()
+#         self.h_weight = 0.5
+
+#     def h(self, state):
+#         r_current, c_current = self.env.to_row_col(state)
+#         goal_states = self.env.get_goal_states()
+#         goal_coords = [self.env.to_row_col(state) for state in goal_states]
+#         manhatans = [
+#             abs(r_current - r_goal) + abs(c_current - c_goal)
+#             for r_goal, c_goal in goal_coords
+#         ]
+#         return min(manhatans + [100])
+
+#     def f(self, node):
+#         return self.h_weight * self.h(node.state) + (1 - self.h_weight) * node.cost
 
 #     def search(self, env: FrozenLakeEnv, h_weight) -> Tuple[List[int], int, float]:
-#         raise NotImplementedError   
+#         self.env = env
+#         self.env.reset()
+#         self.h_weight = h_weight
+#         self.close = {}
+
+#         init_state = self.env.get_initial_state()
+#         node = Node.make_node(init_state, [], 0)
+#         self.open[(node.cost, node.state)] = node
+
+#         while len(self.open) > 0:
+#             node = self.open.popitem()[1]
+#             self.close[node.state] = node
+#             if env.is_final_state(node.state):
+#                 return self.solution(node)
+
+#             for a, (s, c) in self.expand(node):
+#                 new_g = node.cost + c
+#                 ss = [n for n in self.open.values() if n.state == s]
+
+#                 if s in self.close.keys():
+#                     n_curr = self.close[s]
+#                     if new_g < n_curr.cost:
+#                         n_curr = Node.make_node(s, node.actions + [a], new_g)
+#                         self.open[(n_curr.cost, n_curr.state)] = n_curr
+#                         self.close.pop(n_curr.state)
+
+#                 elif len(ss) > 0:
+#                     n_curr = ss[0]
+#                     if new_g < n_curr.cost:
+#                         n_curr = Node.make_node(s, node.actions + [a], new_g)
+#                         self.open[n_curr] = n_curr
+
+#                 else:
+#                     n_curr = Node.make_node(s, node.actions + [a], new_g)
+#                     self.open[n_curr] = n_curr
+
+#         return None
 
 
-# class IDAStarAgent():
+# class IDAStarAgent(Agent):
 #     def __init__(self) -> None:
-#         raise NotImplementedError
-        
+#         super().__init__()
+#         self.env = None
+
+#     def h(self, state):
+#         r_current, c_current = self.env.to_row_col(state)
+#         goal_states = self.env.get_goal_states()
+#         goal_coords = [self.env.to_row_col(state) for state in goal_states]
+#         manhatans = [
+#             abs(r_current - r_goal) + abs(c_current - c_goal)
+#             for r_goal, c_goal in goal_coords
+#         ]
+#         return min(manhatans + [100])
+
+#     def dfs_f(self, node, bound):
+#         f = node.cost + self.h(node.state)
+
+#         if f > bound:
+#             # print(f"Beyond bound {bound} for {node.state}")
+#             return None, f
+
+#         if self.env.is_final_state(node.state):
+#             # print(f"Found sol for node {node.state}")
+#             return node, f
+
+#         new_limit = math.inf
+
+#         # print(f"Expanding node {node.state}, with cost {node.cost}")
+#         for a, (s, c) in self.expand(node):
+#             child = Node.make_node(s, node.actions + [a], node.cost + c)
+#             final_node, child_bound = self.dfs_f(child, bound)
+
+#             if final_node is not None:
+#                 return final_node, child_bound
+
+#             new_limit = min(new_limit, child_bound)
+
+#         return None, new_limit
+
 #     def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
-#         raise NotImplementedError
+#         self.env = env
+#         self.env.reset()
+#         init_state = self.env.get_initial_state()
+#         bound = self.h(init_state)
+#         init_node = Node.make_node(init_state, [], 0)
+
+#         while 1:
+#             final_node, bound = self.dfs_f(init_node, bound)
+#             # print(f"New bound is {bound}")
+#             if final_node is not None:
+#                 return self.solution(final_node)
+
+#             if bound == math.inf:
+#                 return None
