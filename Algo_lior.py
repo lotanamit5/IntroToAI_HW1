@@ -151,7 +151,8 @@ class InformedAgent(Agent):
         ]
         return min(manhatans + [100])
     
-#TODO: no insert to close?
+#TODO: no insert to close? currently holding close regularly.
+# prviously didnt enter to close but checked it (WTF)?
 class GreedyAgent(InformedAgent):
     def __init__(self):
         super().__init__()
@@ -165,6 +166,8 @@ class GreedyAgent(InformedAgent):
 
     def states_in_open(self):
         return [n[1] for n in self.open.values()]
+    
+    def 
     
     
 class WeightedAStarAgent(InformedAgent):
