@@ -263,4 +263,65 @@ class IDAStarAgent(InformedAgent):
         super().__init__()
     
     def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
-        pass
+        self.init_search(env)
+        init_state = self.env.get_initial_state()
+        node = InformedNode(init_state, h=self.h(init_state))
+        
+        bound = node.h
+        path = [node]
+        
+        while True:
+            path, bound = self.dfs_f(path, bound)
+            if path is not None:
+                return self.solution(node)
+            if bound == math.inf:
+                return None
+
+    def dfs_f(self, path, bound):
+        node = path[-1]
+        
+        if node.f > bound:
+            return None, node.f
+        
+        if self.env.is_final_state(node.state):
+            return path, node.f
+        
+        min = math.inf
+        for child in self.expand(node):
+            if child not in path:
+                path.append(child)
+                p, b = self.dfs_f(path, bound)
+                if p is not None:
+                    return p, b
+                if b < min:
+                    min = b
+                path = path[:-1]
+        return None, min
+    # def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
+    #     self.init_search(env)
+    #     init_state = self.env.get_initial_state()
+    #     node = InformedNode(init_state, h=self.h(init_state), g=0)
+        
+    #     while 1:
+    #         node = self.dfs_f(node, [], node.f)
+    #         if node is not None:
+    #             return self.solution(node)
+
+    # def dfs_f(self, node):
+        
+    #     if node.f > boundary:
+    #         return None
+        
+    #     if self.env.is_final_state(node.state):
+    #         return node
+        
+    #     for child in self.expand(node.state):
+    #         sol, child_boundary = self.dfs_f(child, boundary)
+            
+    #         if sol is not None:
+    #             return sol, child_boundary
+        
+    #     return None
+            
+            
+        
