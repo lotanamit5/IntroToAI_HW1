@@ -198,23 +198,49 @@ class WeightedAStarAgent(InformedAgent):
             res.cost += node.cost
             yield res
 
+class WeightedAStarAgent(InformedAgent):
+    def __init__(self):
+        super().__init__()
+    
+    def f(self, node: Node) -> float:
+        return (1-self.h_weight)*node.g + self.h_weight*self.h(node.state)
+    
+    def update_node(self, state: int, parent: Node, g: float, f: float) -> Node:
+        pass
+    
     def search(self, env: FrozenLakeEnv, h_weight=0.5) -> Tuple[List[int], int, float]:
-        self.h_weight = h_weight
         self.init_search(env)
+        self.h_weight = h_weight
+        self.open: heapdict = heapdict.heapdict()
         
-        node: Node = Node(env.get_initial_state())
-        
-        if self.env.is_final_state(node.state):
-            return self.solution(node)
-        self.insert_to_open(node)
+        node = Node(self.env.get_initial_state())
+        self.open[node] = (self.f(node), node.state)
         
         while len(self.open) > 0:
-            node = self.get_next()
+            node, _ = self.open.popitem()
+            
             self.close.add(node.state)
-            if VERBOSE: print(f"close: {[s for s in self.close]}")
-            if self.env.is_final_state(node.state):
+            
+            if env.is_final_state(node.state):
                 return self.solution(node)
+            
             for child in self.expand(node):
-                if child.state not in self.close and child.state not in self.states_in_open():
-                    self.insert_to_open(child)
-                    if VERBOSE: print(f"open: {[s for s in self.open]}")
+                new_g = node.g + child.cost
+                open = [n[1] for n in self.open.values()]
+                
+                if child.state not in self.close and child.state not in open:
+                    self.open[child] = (self.f(child), child.state)
+                    
+                elif child.state in open:
+                    n_curr = next(filter(lambda n, _: n.state == child.state, self.open.keys()), None)[0]
+                    if new_g < n_curr.g:
+                        n_curr = self.update_node(child.state, node, new_g, new_g + self.h(child.state))
+                        self.open.update_key(n_curr)
+                        
+                else:  # child.state in close
+                    n_curr = next(filter(lambda n, _: n.state == child.state, self.close))
+                    if new_g < n_curr.g:
+                        n_curr = self.update_node(child.state, node, new_g, new_g + self.h(child.state))
+                        self.open.update_key(n_curr)
+                        open[n_curr] = (self.f(n_curr), n_curr.state)
+                        self.close.remove(n_curr)
