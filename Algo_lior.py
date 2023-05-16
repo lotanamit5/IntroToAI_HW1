@@ -15,6 +15,7 @@ class Node:
         self.action = action
         self.cost = cost
         self.terminated = terminated
+        self.g = parent.g + cost if parent is not None else cost
         
     def __repr__(self) -> str:
         return f"{self.state}"
@@ -46,8 +47,8 @@ class Agent:
             total_cost += node.cost
             actions.append(node.action)
             node = node.parent
-        actions.reverse()
-        return actions, total_cost, self.expanded
+            
+        return list(reversed(actions)), total_cost, self.expanded
     
     def init_search(self, env: FrozenLakeEnv):
         self.env = env
@@ -130,7 +131,7 @@ class UCSAgent(Agent):
         self.open: heapdict = heapdict.heapdict()
         
     def insert_to_open(self, node):
-        self.open[node] = (node.cost, node.state)
+        self.open[node] = (node.g, node.state)
     
     def get_next(self):
         return self.open.popitem()[0]
@@ -138,6 +139,14 @@ class UCSAgent(Agent):
     def states_in_open(self):
         return [n[1] for n in self.open.values()]
     
+class InformedNode(Node):
+    def __init__(self, state, parent=None, action=0, cost=0, terminated=False,
+                 h=0, f=0):
+        super().__init__(state, parent=parent, action=action, cost=cost, terminated=terminated)
+        self.h = h
+        self.f = f
+
+
 class InformedAgent(Agent):
     def __init__(self):
         super().__init__()
@@ -152,8 +161,18 @@ class InformedAgent(Agent):
         ]
         return min(manhatans + [100])
     
-#TODO: no insert to close? currently holding close regularly.
-# prviously didnt enter to close but checked it (WTF)?
+    def f(self, node: InformedNode) -> float:
+        return node.g + self.h(node.state)
+    
+    def expand(self, node: InformedNode) -> List[InformedNode]:
+        self.expanded += 1
+        
+        for action, (state, cost, terminated) in self.env.succ(node.state).items():
+            if state != None:
+                child = InformedNode(state, parent=node, action=action, cost=cost, terminated=terminated, h=self.h(state))
+                child.f = self.f(child)
+                yield child
+
 class GreedyAgent(InformedAgent):
     def __init__(self):
         super().__init__()
@@ -172,75 +191,113 @@ class GreedyAgent(InformedAgent):
 class WeightedAStarAgent(InformedAgent):
     def __init__(self):
         super().__init__()
-        self.h_weight = 0.5
-        self.open: heapdict = heapdict.heapdict()
     
-    def expand(self, node: Node) -> List[Node]:
-        #self.close = set()
-        return super().expand(node)
+    def f(self, node: InformedNode) -> float:
+        w = self.h_weight
+        if w == 1: # avoid g==inf problem
+            return node.h
+        f = (1 - w) * node.g + w * node.h
+        return f
     
-    def f(self, node: Node) -> float:
-        if self.h_weight == 1:
-            return self.h(node.state)
-        return (1-self.h_weight)*node.cost + self.h_weight*self.h(node.state)
-
-    def insert_to_open(self, node):
-        self.open[node] = (self.f(node), node.state)
-    
-    def get_next(self):
-        return self.open.popitem()[0]
-
-    def states_in_open(self):
-        return [n[1] for n in self.open.values()]
-
-    def expand(self, node):
-        for res in super().expand(node):
-            res.cost += node.cost
-            yield res
-
-class WeightedAStarAgent(InformedAgent):
-    def __init__(self):
-        super().__init__()
-    
-    def f(self, node: Node) -> float:
-        return (1-self.h_weight)*node.g + self.h_weight*self.h(node.state)
-    
-    def update_node(self, state: int, parent: Node, g: float, f: float) -> Node:
-        pass
+    def update_node(self, node: InformedNode, parent: InformedNode, g: float) -> InformedNode:
+        return InformedNode(node.state, parent=parent, action=node.action, cost=node.cost,
+                            terminated=node.terminated, h=self.h(node.state), f=self.f(node))
     
     def search(self, env: FrozenLakeEnv, h_weight=0.5) -> Tuple[List[int], int, float]:
-        self.init_search(env)
+        assert 0 <= h_weight <= 1, "h_weight must be between 0 and 1"
         self.h_weight = h_weight
+        
+        self.init_search(env)
         self.open: heapdict = heapdict.heapdict()
         
-        node = Node(self.env.get_initial_state())
-        self.open[node] = (self.f(node), node.state)
+        init_state = self.env.get_initial_state()
+        node = InformedNode(init_state, h=self.h(init_state))
+        node.f = self.f(node)
+        self.open[node] = (node.f, node.state)
         
         while len(self.open) > 0:
             node, _ = self.open.popitem()
             
-            self.close.add(node.state)
+            self.close.add(node)
             
             if env.is_final_state(node.state):
                 return self.solution(node)
             
             for child in self.expand(node):
                 new_g = node.g + child.cost
-                open = [n[1] for n in self.open.values()]
+                OPEN = [n for n in self.open.keys() if n.state == child.state]
+                CLOSE = [n for n in self.close if n.state == child.state]
                 
-                if child.state not in self.close and child.state not in open:
-                    self.open[child] = (self.f(child), child.state)
+                if len(CLOSE) == 0 and len(OPEN) == 0:
+                    self.open[child] = (child.f, child.state)
                     
-                elif child.state in open:
-                    n_curr = next(filter(lambda n, _: n.state == child.state, self.open.keys()), None)[0]
+                elif len(OPEN) > 0:
+                    n_curr = OPEN[0]
                     if new_g < n_curr.g:
-                        n_curr = self.update_node(child.state, node, new_g, new_g + self.h(child.state))
-                        self.open.update_key(n_curr)
+                        n_curr = self.update_node(child, parent=node, g=new_g)
+                        self.open[n_curr] = (n_curr.f, n_curr.state)
+                        for n in OPEN:
+                            del self.open[n]
                         
-                else:  # child.state in close
-                    n_curr = next(filter(lambda n, _: n.state == child.state, self.close))
+                else:  # child in close
+                    n_curr = CLOSE[0]
                     if new_g < n_curr.g:
-                        n_curr = self.update_node(child.state, node, new_g, new_g + self.h(child.state))
-                        self.open.update_key(n_curr)
-                        open[n_curr] = (self.f(n_curr), n_curr.state)
-                        self.close.remove(n_curr)
+                        n_curr = self.update_node(child, parent=node, g=new_g)
+                        self.open[n_curr] = (n_curr.f, n_curr.state)
+
+
+class IDAStarAgent(Agent):
+    def __init__(self) -> None:
+        super().__init__()
+        self.env = None
+
+    def h(self, state):
+        r_current, c_current = self.env.to_row_col(state)
+        goal_states = self.env.get_goal_states()
+        goal_coords = [self.env.to_row_col(state) for state in goal_states]
+        manhatans = [
+            abs(r_current - r_goal) + abs(c_current - c_goal)
+            for r_goal, c_goal in goal_coords
+        ]
+        return min(manhatans + [100])
+
+    def dfs_f(self, node, bound):
+        f = node.cost + self.h(node.state)
+
+        if f > bound:
+            # print(f"Beyond bound {bound} for {node.state}")
+            return None, f
+
+        if self.env.is_final_state(node.state):
+            # print(f"Found sol for node {node.state}")
+            return node, f
+
+        new_limit = math.inf
+
+        # print(f"Expanding node {node.state}, with cost {node.cost}")
+        for a, (s, c) in self.expand(node):
+            child = Node.make_node(s, node.actions + [a], node.cost + c)
+            final_node, child_bound = self.dfs_f(child, bound)
+
+            if final_node is not None:
+                return final_node, child_bound
+
+            new_limit = min(new_limit, child_bound)
+
+        return None, new_limit
+
+    def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
+        self.env = env
+        self.env.reset()
+        init_state = self.env.get_initial_state()
+        bound = self.h(init_state)
+        init_node = Node.make_node(init_state, [], 0)
+
+        while 1:
+            final_node, bound = self.dfs_f(init_node, bound)
+            # print(f"New bound is {bound}")
+            if final_node is not None:
+                return self.solution(final_node)
+
+            if bound == math.inf:
+                return None
