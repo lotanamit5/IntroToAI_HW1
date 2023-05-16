@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from collections import deque
 from abc import abstractmethod
@@ -246,37 +247,23 @@ class WeightedAStarAgent(InformedAgent):
                         self.open[n_curr] = (n_curr.f, n_curr.state)
 
 
-class IDAStarAgent(Agent):
-    def __init__(self) -> None:
-        super().__init__()
-        self.env = None
-
-    def h(self, state):
-        r_current, c_current = self.env.to_row_col(state)
-        goal_states = self.env.get_goal_states()
-        goal_coords = [self.env.to_row_col(state) for state in goal_states]
-        manhatans = [
-            abs(r_current - r_goal) + abs(c_current - c_goal)
-            for r_goal, c_goal in goal_coords
-        ]
-        return min(manhatans + [100])
+class IDAStarAgent(InformedAgent):
 
     def dfs_f(self, node, bound):
-        f = node.cost + self.h(node.state)
-
+        f = self.f(node)
         if f > bound:
-            # print(f"Beyond bound {bound} for {node.state}")
+            if VERBOSE: print(f"Beyond bound {bound} for {node.state}")
             return None, f
 
         if self.env.is_final_state(node.state):
-            # print(f"Found sol for node {node.state}")
+            if VERBOSE: print(f"Found sol for node {node.state}")
             return node, f
 
         new_limit = math.inf
 
-        # print(f"Expanding node {node.state}, with cost {node.cost}")
-        for a, (s, c) in self.expand(node):
-            child = Node.make_node(s, node.actions + [a], node.cost + c)
+        if VERBOSE: print(f"Expanding node {node.state}, with cost {node.cost}")
+        for child in self.expand(node):
+            if child.state == node.state: continue
             final_node, child_bound = self.dfs_f(child, bound)
 
             if final_node is not None:
@@ -291,9 +278,10 @@ class IDAStarAgent(Agent):
         self.env.reset()
         init_state = self.env.get_initial_state()
         bound = self.h(init_state)
-        init_node = Node.make_node(init_state, [], 0)
+        init_node = InformedNode(init_state)
 
         while 1:
+            self.close.clear()
             final_node, bound = self.dfs_f(init_node, bound)
             # print(f"New bound is {bound}")
             if final_node is not None:
