@@ -1,6 +1,7 @@
 import numpy as np
 from collections import deque
 from abc import abstractmethod
+#from Algo_lior import Node
 from FrozenLakeEnv import FrozenLakeEnv
 from typing import List, Tuple
 import heapdict
@@ -22,7 +23,7 @@ class Agent:
     def __init__(self):
         self.env: FrozenLakeEnv = None
         self.open = None
-        self.close: set = None
+        self.close = set()
         self.expanded: int= 0
         
     def expand(self, node: Node) -> List[Node]:
@@ -45,26 +46,26 @@ class Agent:
             total_cost += node.cost
             actions.append(node.action)
             node = node.parent
-            
-        return reversed(actions), total_cost, self.expanded
+        actions.reverse()
+        return actions, total_cost, self.expanded
     
     def init_search(self, env: FrozenLakeEnv):
         self.env = env
         self.env.reset()
         self.expanded = 0
-        self.close = set()
+        self.close.clear()
     
     @abstractmethod
     def insert_to_open(self, node):
-        raise NotImplementedError
+        pass
 
     @abstractmethod
     def states_in_open(self):
-        raise NotImplementedError
+        pass
 
     @abstractmethod
     def get_next(self):
-        raise NotImplementedError
+        pass
 
     def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
         self.init_search(env)
@@ -166,9 +167,7 @@ class GreedyAgent(InformedAgent):
 
     def states_in_open(self):
         return [n[1] for n in self.open.values()]
-    
-    def 
-    
+        
     
 class WeightedAStarAgent(InformedAgent):
     def __init__(self):
@@ -176,7 +175,13 @@ class WeightedAStarAgent(InformedAgent):
         self.h_weight = 0.5
         self.open: heapdict = heapdict.heapdict()
     
+    def expand(self, node: Node) -> List[Node]:
+        #self.close = set()
+        return super().expand(node)
+    
     def f(self, node: Node) -> float:
+        if self.h_weight == 1:
+            return self.h(node.state)
         return (1-self.h_weight)*node.cost + self.h_weight*self.h(node.state)
 
     def insert_to_open(self, node):
@@ -187,7 +192,29 @@ class WeightedAStarAgent(InformedAgent):
 
     def states_in_open(self):
         return [n[1] for n in self.open.values()]
-    
+
+    def expand(self, node):
+        for res in super().expand(node):
+            res.cost += node.cost
+            yield res
+
     def search(self, env: FrozenLakeEnv, h_weight=0.5) -> Tuple[List[int], int, float]:
         self.h_weight = h_weight
-        return super().search(env)
+        self.init_search(env)
+        
+        node: Node = Node(env.get_initial_state())
+        
+        if self.env.is_final_state(node.state):
+            return self.solution(node)
+        self.insert_to_open(node)
+        
+        while len(self.open) > 0:
+            node = self.get_next()
+            self.close.add(node.state)
+            if VERBOSE: print(f"close: {[s for s in self.close]}")
+            if self.env.is_final_state(node.state):
+                return self.solution(node)
+            for child in self.expand(node):
+                if child.state not in self.close and child.state not in self.states_in_open():
+                    self.insert_to_open(child)
+                    if VERBOSE: print(f"open: {[s for s in self.open]}")
