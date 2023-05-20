@@ -188,12 +188,13 @@ class GreedyAgent(InformedAgent):
 
         while len(self.open) > 0:
             node, _ = self.open.popitem()
+            self.close.add(node.state)
             if env.is_final_state(node.state):
                 return self.solution(node)
 
             for child in self.expand(node):
-                open = [n[1] for n in self.open.values()]
-                if child.state not in self.close and child.state not in open:
+                OPEN = [n[1] for n in self.open.values()]
+                if child.state not in self.close and child.state not in OPEN:
                     self.open[child] = (child.h, child.state)
 
         return None
@@ -270,59 +271,32 @@ class IDAStarAgent(InformedAgent):
         init_state = self.env.get_initial_state()
         root = InformedNode(init_state, h=self.h(init_state))
         self.new_limit = root.h
-        # path = [root]
+
         while True:
             f_limit = self.new_limit
-            print(f"{f_limit=}")
             self.new_limit = math.inf
             result = self.dfs_f(root, [], f_limit)
-            if result != self.FAILURE:
-                return self.solution()
+            if result != None:
+                return self.solution(result[-1])
         
-        return self.FAILURE
-            # t = self.dfs_f(path, 0, bound)
-            # if t == self.FOUND:
-            #     return self.solution(path[-1])
-            # if t == math.inf:
-            #     return None
-            # bound = t
+        return None
 
     def dfs_f(self, node:InformedNode, path: list, f_limit: int):
         new_f = node.g + node.h
         
         if new_f > f_limit:
             self.new_limit = min(self.new_limit, new_f)
-            return self.FAILURE
+            return None
         
         if self.env.is_final_state(node.state):
             return path
         
         for child in self.expand(node):
-            result = self.dfs_f(child, path + [child], f_limit)
-            if result != self.FAILURE:
-                return result
+            path_states = [n.state for n in path]
+            if child.state not in path_states:
+                result = self.dfs_f(child, path + [child], f_limit)
+                if result != None:
+                    return result
         
-        return self.FAILURE
-        # node = path[-1]
-        # f = g + self.h(node.state)
-        
-        # if f > bound:
-        #     return f
-        # if self.env.is_final_state(node.state):
-        #     return self.FOUND
-        
-        # min = math.inf
-        # for child in self.expand(node):
-        #     if child.state not in [n.state for n in path]:
-        #         path.append(child)
-        #         t = self.dfs_f(path, child.f, bound)
-        #         if t == self.FOUND:
-        #             return self.FOUND
-        #         if t < min:
-        #             min = t
-        #         path = path[:-1]
-                
-        # return min
-
-# TODO: remove h, g and f props from Node
+        return None
         
