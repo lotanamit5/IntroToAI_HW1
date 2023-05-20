@@ -222,7 +222,7 @@ class WeightedAStarAgent(InformedAgent):
         self.open: heapdict = heapdict.heapdict()
         
         init_state = self.env.get_initial_state()
-        node = InformedNode(init_state, h=self.h(init_state),g=0)
+        node = InformedNode(init_state, h=self.h(init_state))
         node.f = self.f(node)
         self.open[node] = (node.f, node.state)
         
@@ -265,38 +265,40 @@ class IDAStarAgent(InformedAgent):
     def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
         self.init_search(env)
         init_state = self.env.get_initial_state()
-        node = InformedNode(init_state, h=self.h(init_state))
+        root = InformedNode(init_state, h=self.h(init_state))
+        self.FOUND = -1
         
-        bound = node.h
-        path = [node]
-        
+        bound = root.h
+        path = [root]
         while True:
-            path, bound = self.dfs_f(path, bound)
-            if path is not None:
-                return self.solution(node)
-            if bound == math.inf:
+            t = self.dfs_f(path, 0, bound)
+            if t == self.FOUND:
+                return self.solution(path[-1])
+            if t == math.inf:
                 return None
+            bound = t
 
-    def dfs_f(self, path, bound):
+    def dfs_f(self, path: list, g: int, bound: int):
         node = path[-1]
+        f = g + self.h(node.state)
         
-        if node.f > bound:
-            return None, node.f
-        
+        if f > bound:
+            return f
         if self.env.is_final_state(node.state):
-            return path, node.f
+            return self.FOUND
         
         min = math.inf
         for child in self.expand(node):
-            if child not in path:
+            if child.state not in [n.state for n in path]:
                 path.append(child)
-                p, b = self.dfs_f(path, bound)
-                if p is not None:
-                    return p, b
-                if b < min:
-                    min = b
+                t = self.dfs_f(path, child.f, bound)
+                if t == self.FOUND:
+                    return self.FOUND
+                if t < min:
+                    min = t
                 path = path[:-1]
-        return None, min
+                
+        return min
     # def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
     #     self.init_search(env)
     #     init_state = self.env.get_initial_state()
