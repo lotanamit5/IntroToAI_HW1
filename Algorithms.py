@@ -211,9 +211,9 @@ class WeightedAStarAgent(InformedAgent):
         f = (1 - w) * node.g + w * node.h
         return f
     
-    def update_node(self, node: InformedNode, parent: InformedNode, g: float) -> InformedNode:
+    def update_node(self, node: InformedNode, parent: InformedNode) -> InformedNode:
         return InformedNode(node.state, parent=parent, action=node.action, cost=node.cost,
-                            terminated=node.terminated, g=g, h=self.h(node.state), f=self.f(node))
+                            terminated=node.terminated, h=self.h(node.state), f=self.f(node))
     
     def search(self, env: FrozenLakeEnv, h_weight=0.5) -> Tuple[List[int], int, float]:
         assert 0 <= h_weight <= 1, "h_weight must be between 0 and 1"
@@ -246,7 +246,7 @@ class WeightedAStarAgent(InformedAgent):
                 elif len(OPEN) > 0:
                     n_curr = OPEN[0]
                     if new_g < n_curr.g:
-                        n_curr = self.update_node(child, parent=node, g=new_g)
+                        n_curr = self.update_node(child, parent=node)
                         self.open[n_curr] = (n_curr.f, n_curr.state)
                         for n in OPEN:
                             del self.open[n]
@@ -254,9 +254,9 @@ class WeightedAStarAgent(InformedAgent):
                 else:  # child in close
                     n_curr = CLOSE[0]
                     if new_g < n_curr.g:
-                        n_curr = self.update_node(child, parent=node, g=new_g)
-                        OPEN[n_curr] = (n_curr.f, n_curr.state)
                         self.close.remove(n_curr)
+                        n_curr = self.update_node(child, parent=node)
+                        self.open[n_curr] = (n_curr.f, n_curr.state)
 
 
 class IDAStarAgent(InformedAgent):
