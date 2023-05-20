@@ -261,69 +261,68 @@ class WeightedAStarAgent(InformedAgent):
 class IDAStarAgent(InformedAgent):
     def __init__(self):
         super().__init__()
+        self.FOUND = -1
+        self.FAILURE = -2
+        self.new_limit = math.inf
     
     def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
         self.init_search(env)
         init_state = self.env.get_initial_state()
         root = InformedNode(init_state, h=self.h(init_state))
-        self.FOUND = -1
-        
-        bound = root.h
-        path = [root]
+        self.new_limit = root.h
+        # path = [root]
         while True:
-            t = self.dfs_f(path, 0, bound)
-            if t == self.FOUND:
-                return self.solution(path[-1])
-            if t == math.inf:
-                return None
-            bound = t
-
-    def dfs_f(self, path: list, g: int, bound: int):
-        node = path[-1]
-        f = g + self.h(node.state)
+            f_limit = self.new_limit
+            print(f"{f_limit=}")
+            self.new_limit = math.inf
+            result = self.dfs_f(root, [], f_limit)
+            if result != self.FAILURE:
+                return self.solution()
         
-        if f > bound:
-            return f
+        return self.FAILURE
+            # t = self.dfs_f(path, 0, bound)
+            # if t == self.FOUND:
+            #     return self.solution(path[-1])
+            # if t == math.inf:
+            #     return None
+            # bound = t
+
+    def dfs_f(self, node:InformedNode, path: list, f_limit: int):
+        new_f = node.g + node.h
+        
+        if new_f > f_limit:
+            self.new_limit = min(self.new_limit, new_f)
+            return self.FAILURE
+        
         if self.env.is_final_state(node.state):
-            return self.FOUND
+            return path
         
-        min = math.inf
         for child in self.expand(node):
-            if child.state not in [n.state for n in path]:
-                path.append(child)
-                t = self.dfs_f(path, child.f, bound)
-                if t == self.FOUND:
-                    return self.FOUND
-                if t < min:
-                    min = t
-                path = path[:-1]
+            result = self.dfs_f(child, path + [child], f_limit)
+            if result != self.FAILURE:
+                return result
+        
+        return self.FAILURE
+        # node = path[-1]
+        # f = g + self.h(node.state)
+        
+        # if f > bound:
+        #     return f
+        # if self.env.is_final_state(node.state):
+        #     return self.FOUND
+        
+        # min = math.inf
+        # for child in self.expand(node):
+        #     if child.state not in [n.state for n in path]:
+        #         path.append(child)
+        #         t = self.dfs_f(path, child.f, bound)
+        #         if t == self.FOUND:
+        #             return self.FOUND
+        #         if t < min:
+        #             min = t
+        #         path = path[:-1]
                 
-        return min
-    # def search(self, env: FrozenLakeEnv) -> Tuple[List[int], int, float]:
-    #     self.init_search(env)
-    #     init_state = self.env.get_initial_state()
-    #     node = InformedNode(init_state, h=self.h(init_state), g=0)
-        
-    #     while 1:
-    #         node = self.dfs_f(node, [], node.f)
-    #         if node is not None:
-    #             return self.solution(node)
+        # return min
 
-    # def dfs_f(self, node):
-        
-    #     if node.f > boundary:
-    #         return None
-        
-    #     if self.env.is_final_state(node.state):
-    #         return node
-        
-    #     for child in self.expand(node.state):
-    #         sol, child_boundary = self.dfs_f(child, boundary)
-            
-    #         if sol is not None:
-    #             return sol, child_boundary
-        
-    #     return None
-            
-            
+# TODO: remove h, g and f props from Node
         
